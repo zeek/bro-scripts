@@ -1,0 +1,20 @@
+
+.. This README is wrriten in reST and may at some point be published
+.. automatically on www.bro-ids.org.
+
+========================
+Contributed Bro Scripts
+========================
+
+``foo.bro``
+===========
+
+The `foo.bro <foo.bro>`_ script detects every possible attack, which makes
+it quite convient to have.
+
+Requires Bro 1.5.
+
+Contributed by Foo Bar.
+
+
+
