@@ -1,20 +1,88 @@
 
-.. This README is wrriten in reST and may at some point be published
+.. This README is written in reST and may at some point be published
 .. automatically on www.bro-ids.org.
 
 ========================
 Contributed Bro Scripts
 ========================
 
-``foo.bro``
-===========
+``sidejack.bro``
+================
 
-The `foo.bro <foo.bro>`_ script detects every possible attack, which makes
-it quite convient to have.
+The `sidejack.bro <sidejack.bro>`_ script detects the reuse of session cookies
+in different contexts. Sidejacking_ is also known as cookie hijacking and means
+that an attacker captured a session cookie of a victim to reuse that session.
+Off-the-shelf tools like Firesheep_ implement this attack as a Firefox
+extension, which makes this attack accessible to the masses.
+
+In its default settings, the script raises a SessionCookiReuse notice when the
+same session cookie is seen from different user agents. If in addition the IP
+addresses do not match, a Sidejack notice is being triggered.
+
+There exist various options to tweak the behavior of the script. First, the
+notion of a user can be changed. In flat IP address space, it makes sense to
+identify a user by its IP address, but this would fail in a NAT environment
+where a single IP accomodates several users. For NAT scenarios, one could
+define a user as a pair of IP address and User-Agent header. For large NATs or
+NATs with identically configured machines, this latter notion of user could be
+prone to false positivies. The user can change the definition of a user via
+
+::
+
+    redef HTTP::user_is_ip = F;
+
+Another issue poses the presence of absence of DHCP context. Consider a hotspot
+or coffeeshop network operator with a private IP space. If Bro can see DHCP
+traffic, we can crisply identify a user by its MAC address and do not have to
+resort to high-level notions, such as provided by HTTP headers. In a static
+setup, however, this context will likely not be available. At the same time, if
+a different address reuses a session cookie in a static IP topology, we
+probably observed a sidejacking attack. Furthermore, if the same address uses
+the same sesssion cookie from a different user agent, we report such activity.
+By setting
+
+::
+
+    redef HTTP::use_dhcp_aliases = T;
+    
+one tells Bro to use the DHCP analyzer to keep track of multiple IP addresses
+for the same host. It makes only sense to set this flag when Bro actually sees
+DHCP traffic.
+
+There is another subtlety: the cookie header consists of a list of key-value
+pairs, yet only a subset of those represent a user session while the others
+could be random. Simply comparing the entire cookie string against a value seen
+in the past would thus be prone to false negatives. Hence we have to restrict
+ourselves to the relevant session-identifying subset. In fact, this is how
+Firesheeps works: it ships with site-specific handlers that define the cookie
+keys to extract and then sets only those to impersonate a user. This motivates
+the following design: if a specification for a particular service is available,
+restrict the cookie to the relevant fields, and otherwise use the cookie as a
+whole. The default set of known services that ships with the detector is based
+on all handlers Firesheep currently implements. To extend the detection to all
+cookies, one can set
+
+::
+
+    redef HTTP::known_services_only = F;
+
+Finally, there are timeouts for cookie expiration and DHCP expiration can be
+adjusted, e.g.,
+
+::
+
+    redef HTTP::cookie_expiration = 1 day;
+    redef HTTP::dhcp_expiration = 7 days;
+
+If a cookie is not seen after the ``cookie_expiration``, the associated state
+is removed. Similarly, previous IP addresses of a host that is inactive for
+more than the ``dhcp_expiration`` will be expunged. More information about the
+script can be found at SidejackingBlogPost_.
 
 Requires Bro 1.5.
 
-Contributed by Foo Bar.
+.. SidejackingBlogPost_: http://matthias.vallentin.net/2010/10/taming-sheep-detecting-sidejacking-in.html
+.. Sidejacking_: http://en.wikipedia.org/wiki/Session_hijacking
+.. Firesheep_: http://codebutler.com/firesheep
 
-
-
+Contributed by Matthias Vallentin.
