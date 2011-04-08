@@ -1,17 +1,18 @@
 
-.. This README is written in reST and may at some point be published
-.. automatically on www.bro-ids.org.
-
 ========================
 Contributed Bro Scripts
 ========================
 
+.. contents::
+
 ``sidejack.bro``
 ================
 
-The `sidejack.bro <sidejack.bro>`_ script detects the reuse of session cookies
-in different contexts. Sidejacking_ is also known as cookie hijacking and means
-that an attacker captured a session cookie of a victim to reuse that session.
+The `sidejack.bro
+<http://git.bro-ids.org/bro-scripts.git/blob_plain/HEAD:/sidejack.bro>`_
+script detects the reuse of session cookies in different contexts.
+Sidejacking_ is also known as cookie hijacking and means that an
+attacker captured a session cookie of a victim to reuse that session.
 Off-the-shelf tools like Firesheep_ implement this attack as a Firefox
 extension, which makes this attack accessible to the masses.
 
@@ -81,8 +82,8 @@ script can be found at SidejackingBlogPost_.
 
 Requires Bro 1.5.
 
-.. SidejackingBlogPost_: http://matthias.vallentin.net/2010/10/taming-sheep-detecting-sidejacking-in.html
-.. Sidejacking_: http://en.wikipedia.org/wiki/Session_hijacking
-.. Firesheep_: http://codebutler.com/firesheep
+.. _SidejackingBlogPost: http://matthias.vallentin.net/2010/10/taming-sheep-detecting-sidejacking-in.html
+.. _Sidejacking: http://en.wikipedia.org/wiki/Session_hijacking
+.. _Firesheep: http://codebutler.com/firesheep
 
 Contributed by Matthias Vallentin.
