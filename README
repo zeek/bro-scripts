@@ -16,17 +16,17 @@ attacker captured a session cookie of a victim to reuse that session.
 Off-the-shelf tools like Firesheep_ implement this attack as a Firefox
 extension, which makes this attack accessible to the masses.
 
-In its default settings, the script raises a SessionCookiReuse notice when the
-same session cookie is seen from different user agents. If in addition the IP
-addresses do not match, a Sidejack notice is being triggered.
+In its default settings, the script raises a ``SessionCookieReuse`` notice when
+the same session cookie is seen from different user agents. If in addition the
+IP addresses do not match, a Sidejack notice is being triggered.
 
 There exist various options to tweak the behavior of the script. First, the
 notion of a user can be changed. In flat IP address space, it makes sense to
 identify a user by its IP address, but this would fail in a NAT environment
-where a single IP accomodates several users. For NAT scenarios, one could
-define a user as a pair of IP address and User-Agent header. For large NATs or
+where a single IP accommodates several users. For NAT scenarios, one could
+define a user as a pair of IP address and USER-AGENT header. For large NATs or
 NATs with identically configured machines, this latter notion of user could be
-prone to false positivies. The user can change the definition of a user via
+prone to false positives. The user can change the definition of a user via
 
 ::
 
@@ -39,7 +39,7 @@ resort to high-level notions, such as provided by HTTP headers. In a static
 setup, however, this context will likely not be available. At the same time, if
 a different address reuses a session cookie in a static IP topology, we
 probably observed a sidejacking attack. Furthermore, if the same address uses
-the same sesssion cookie from a different user agent, we report such activity.
+the same session cookie from a different user agent, we report such activity.
 By setting
 
 ::
@@ -55,7 +55,7 @@ pairs, yet only a subset of those represent a user session while the others
 could be random. Simply comparing the entire cookie string against a value seen
 in the past would thus be prone to false negatives. Hence we have to restrict
 ourselves to the relevant session-identifying subset. In fact, this is how
-Firesheeps works: it ships with site-specific handlers that define the cookie
+Firesheep works: it ships with site-specific handlers that define the cookie
 keys to extract and then sets only those to impersonate a user. This motivates
 the following design: if a specification for a particular service is available,
 restrict the cookie to the relevant fields, and otherwise use the cookie as a
