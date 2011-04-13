@@ -87,3 +87,62 @@ Requires Bro 1.5.
 .. _Firesheep: http://codebutler.com/firesheep
 
 Contributed by Matthias Vallentin.
+
+
+``mime-attachment.bro``
+=======================
+
+The `mime-attachment.bro <mime-attachment.bro>`_ script extracts MIME entities
+from a STMP session and reports suspicious email attachments, and optionally
+saves them to disk. Storing attachment on disk allows for powerful
+out-of-the-loop post-processing, such as scanning office documents for
+malicious JavaScript or executables for viruses. 
+
+The script works by registering a callback handler for the CONTENT-TYPE header
+in an SMTP session. Then both MIME type and the name of the attachment is
+examined. If either looks suspicious, Bro generates a ``SensitiveMIMEType`` or
+``SensitiveExtension`` notice. The user can customize the the analyzer behavior
+in many ways. To change the directory where the attachments are stored on disk,
+one can redefine the ``attachment_dir`` variable:
+
+::
+
+    redef Email::attachment_dir = "foo";
+
+The script stores attachments by default, but this behavior can easily changed
+via:
+
+::
+
+    # Whether attachments with sensitive MIME types should be stored.
+    redef Email::store_sensitive_mime_types = F;
+
+    # Whether attachments with sensitive file extensions should be stored.
+    redef Email::store_sensitive_extensions = F;
+
+It is also possible to restrict or extend the regular expression used to
+determine whether an attachment is sensitive or not:
+
+::
+
+    # Deem only application\/octet-stream as suspicious.
+    redef Email::sensitive_mime_types = /application\/octet-stream;
+
+    # Restrict sensitive extensions to office documents and executables.
+    redef Email::sensitive_extensions = 
+        /[pP][dD][fF]$/
+      | /[dD][oO][cC][xX]?$/
+      | /[xX][lL][sS]$/
+      | /[pP][pP][sStT]$/
+      | /[eE][xX][eE]$/
+      | /[cC][oO][mM]$/
+      | /[bB][aA][tT]$/;
+
+The script generates a file of the form ``<ID>-<filename>`` where ``ID`` is a
+unique attachment ID that is monotonically increasing and ``filename`` is the
+name of the attachment or just the MIME type if the attachment does not have a
+name.
+
+Requires Bro 1.5
+
+Contributed by Matthias Vallentin.
