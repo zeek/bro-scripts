@@ -161,7 +161,6 @@ redef MIME::mime_header_handler += {
 # Close attachment and evict state.
 event mime_end_entity(c: connection)
 {
-    local session = MIME::get_session(c, F);
     local id = c$id;
     if (id !in attachments)
         return;
@@ -174,7 +173,6 @@ event mime_end_entity(c: connection)
 # Dispatch mime segment data to the corresponding attachment.
 event mime_segment_data(c: connection, length: count, data: string)
 {
-    local session = MIME::get_session(c, F);
     local id = c$id;
     if (id !in attachments)
         return;
