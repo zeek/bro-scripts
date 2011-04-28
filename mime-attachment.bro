@@ -3,8 +3,14 @@
 #
 # An email attachment analyzer.
 #
-# It inspects the CONTENT-TYPE header of a MIME attachment. It reports
-# potentially problematic mime types and names of sensitive file extensions.
+# It inspects the CONTENT-(TYPE|DISPOSITION) headers of a MIME attachment and
+# reports potentially problematic MIME types and names of sensitive file
+# extensions.
+#
+# Although the standard says that the filename of an attachment should be in
+# the CONTENT-DISPOSITION header, we often MIME sessions where this header does
+# not even exist or where the filename is in the CONTENT-TYPE header (or both).
+# The script thus checks both CONTENT-* headers to not miss any attachments.
 #
 
 module Email;
@@ -103,45 +109,78 @@ function new_attachment(session: MIME::mime_session_info, mime_type: string,
     return a;
 }
 
-# Invoked for every CONTENT-TYPE header.
-function mime_header_content_type(session: MIME::mime_session_info, 
-    name: string, arg: string)
+# Extract the name of the file from a MIME header.
+function extract_filename(str: string) : string
 {
-    local mime_type = sub(arg, /;.*$/, "");
-    local filename: string;
+    if (/[nN][aA][mM][eE]=/ !in str)
+        return "";
+
+    local filename = sub(str, /^.*[nN][aA][mM][eE]=/, "");
+    filename = gsub(filename, /\"/, "");  # Strip ".
+
+    return filename;
+}
+
+event mime_all_headers(c: connection, hlist: mime_header_list)
+{
+	local session = MIME::get_session(c, T);
+	local id = session$connection_id;
     local store_attachment = F;
 
-    if (sensitive_mime_types in mime_type)
+    local mime_type = "";
+    local filename = "";
+
+	local i = 0;
+	for (i in hlist)
+    {
+		local header = hlist[i];
+        if (header$name == "CONTENT-DISPOSITION")
+        {
+            print fmt("%s:%s", header$name, header$value);
+            filename = extract_filename(header$value);
+            print fmt("  --> %s", filename);
+        }
+		else if (header$name == "CONTENT-TYPE")
+		{
+            print fmt("%s:%s", header$name, header$value);
+            mime_type = sub(header$value, /;.*$/, "");
+
+            # Give CONTENT-DISPOSION precedence.
+            if (filename == "")
+                filename = gsub(mime_type, /\//, "_");
+
+            local f = extract_filename(header$value);
+            if (f != "")
+                filename = f;
+            print fmt("  --> %s", filename);
+        }
+    }
+
+    if (mime_type != "" && sensitive_mime_types in mime_type)
     {
         NOTICE([$note=SensitiveMIMEType, 
-                $id=session$connection_id,
+                $id=id,
                 $msg=fmt("sensitive MIME type in email attachment (%s)",
                     mime_type),
                 $tag=fmt("%d", session$id)
                 ]);
 
         if (store_sensitive_mime_types)
-        {
             store_attachment = T;
-            filename = gsub(mime_type, /\//, "_");
-        }
     }
 
-    if (/[nN][aA][mM][eE]=/ in arg)
+    if (filename != "" && sensitive_extensions in filename)
     {
-        filename = sub(arg, /^.*[nN][aA][mM][eE]=/, "");
-        filename = gsub(filename, /\"/, "");  # Strip ".
+        NOTICE([$note=SensitiveExtension,
+                $id=id,
+                $msg=fmt("sensitive extension in email attachment (%s)",
+                    filename),
+                $filename=filename,
+                $tag=fmt("%d", session$id)
+                ]);
 
-        if (sensitive_extensions in filename)
-            NOTICE([$note=SensitiveExtension, 
-                    $id=session$connection_id,
-                    $msg=fmt("sensitive extension in email attachment (%s)",
-                        filename),
-                    $filename=filename,
-                    $tag=fmt("%d", session$id)
-                    ]);
-
-        store_attachment = T;
+        if (store_sensitive_extensions)
+            store_attachment = T;
     }
 
     if (store_attachment)
@@ -153,10 +192,6 @@ function mime_header_content_type(session: MIME::mime_session_info,
         a$fh = open(filename);
     }
 }
-
-redef MIME::mime_header_handler += { 
-    ["CONTENT-TYPE"] = mime_header_content_type
-};
 
 # Close attachment and evict state.
 event mime_end_entity(c: connection)
