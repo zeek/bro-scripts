@@ -5,6 +5,59 @@ Contributed Bro Scripts
 
 .. contents::
 
+``roam.bro``
+============
+
+The `roam.bro
+<http://git.bro-ids.org/bro-scripts.git/blob_plain/HEAD:/roam.bro>`_ script
+collects IP-to-MAC mappings (and vice versa) of machines that may have more
+than one IP address over time due to a DHCP server in the network.
+
+When keeping per-IP-address state, it could well be that the address becomes
+invalid because the client's DHCP lease expired or because it received a new IP
+address after rejoining the network. Ideally, this state would roam with the
+user. But many Bro script data structures use per-address indices and would
+mechanistically instantiate state for a new client even though it merely
+reappeared under a new IP address. To incorporate the notion of roaming,
+``roam.bro`` makes available two data structures that script writers can use:
+
+::
+    global ip_to_mac: table[addr] of string
+        &read_expire = alias_expiration &synchronized;
+
+    global mac_to_ip: table[string] of set[addr]
+        &read_expire = alias_expiration &synchronized;
+
+Event handlers for the ``dhcp_ack`` and ``arp_reply`` events populate these
+tables. For example, the sidejacking script (see below) makes use of
+``roam.bro`` to test whether a certain client IP address is an alias of another
+IP address:
+
+::
+    function is_aliased(client: addr, ctx: cookie_context) : bool
+    {
+        if (client in Roam::ip_to_mac)
+        {
+            local mac = Roam::ip_to_mac[client];
+            if (mac == ctx$mac && mac in Roam::mac_to_ip
+                && client in Roam::mac_to_ip[mac])
+                return T;
+        }
+
+        return F;
+    }
+
+If the two table are not accessed for more than the ``alias_expiration``, the
+entry will expire. It is possible to redefine the expiration interval:
+
+::
+    redef Roam::alias_expiration = 7 days;
+
+Requires Bro 1.5
+
+Author: Matthias Vallentin
+
+
 ``sidejack.bro``
 ================
 
@@ -32,23 +85,23 @@ prone to false positives. The user can change the definition of a user via
 
     redef HTTP::user_is_ip = F;
 
-Another issue poses the presence of absence of DHCP context. Consider a hotspot
-or coffeeshop network operator with a private IP space. If Bro can see DHCP
-traffic, we can crisply identify a user by its MAC address and do not have to
-resort to high-level notions, such as provided by HTTP headers. In a static
-setup, however, this context will likely not be available. At the same time, if
-a different address reuses a session cookie in a static IP topology, we
-probably observed a sidejacking attack. Furthermore, if the same address uses
-the same session cookie from a different user agent, we report such activity.
-By setting
+Another issue poses the presence of absence of link-layer context. Consider a
+hotspot or coffeeshop network operator with a private IP space. If Bro can see
+DHCP or ARP traffic, we can crisply identify a user by its MAC address and do
+not have to resort to high-level notions, such as provided by HTTP headers. In
+a static setup, however, this context will likely not be available. At the same
+time, if a different address reuses a session cookie in a static IP topology,
+we probably observed a sidejacking attack. Furthermore, if the same address
+uses the same session cookie from a different user agent, we report such
+activity.  By setting
 
 ::
 
-    redef HTTP::use_dhcp_aliases = T;
-    
-one tells Bro to use the DHCP analyzer to keep track of multiple IP addresses
-for the same host. It makes only sense to set this flag when Bro actually sees
-DHCP traffic.
+    redef HTTP::use_aliasing = T;
+
+one tells Bro to use keep track of multiple IP addresses for the same host via
+``roam.bro``. It makes only sense to set this flag when Bro actually sees DHCP
+or ARP traffic.
 
 There is another subtlety: the cookie header consists of a list of key-value
 pairs, yet only a subset of those represent a user session while the others
@@ -67,26 +120,25 @@ cookies, one can set
 
     redef HTTP::known_services_only = F;
 
-Finally, there are timeouts for cookie expiration and DHCP expiration can be
-adjusted, e.g.,
+Finally, the timeout for cookie expiration can be adjusted, e.g.,
 
 ::
 
     redef HTTP::cookie_expiration = 1 day;
-    redef HTTP::dhcp_expiration = 7 days;
 
 If a cookie is not seen after the ``cookie_expiration``, the associated state
-is removed. Similarly, previous IP addresses of a host that is inactive for
-more than the ``dhcp_expiration`` will be expunged. More information about the
-script can be found at SidejackingBlogPost_.
+is removed. More information about the script can be found at
+SidejackingBlogPost_.
 
 Requires Bro 1.5.
 
-.. _SidejackingBlogPost: http://matthias.vallentin.net/2010/10/taming-sheep-detecting-sidejacking-in.html
+.. _SidejackingBlogPost: http://matthias.vallentin.net/blog/2010/10/taming-the-sheep-detecting-sidejacking-with-bro/
 .. _Sidejacking: http://en.wikipedia.org/wiki/Session_hijacking
 .. _Firesheep: http://codebutler.com/firesheep
 
-Contributed by Matthias Vallentin.
+Author: Matthias Vallentin
+
+Contributors: Jordi Ros-Giralt
 
 
 ``mime-attachment.bro``
@@ -96,7 +148,7 @@ The `mime-attachment.bro <mime-attachment.bro>`_ script extracts MIME entities
 from a STMP session and reports suspicious email attachments, and optionally
 saves them to disk. Storing attachment on disk allows for powerful
 out-of-the-loop post-processing, such as scanning office documents for
-malicious JavaScript or executables for viruses. 
+malicious JavaScript or executables for viruses.
 
 The script works by registering a callback handler for the CONTENT-TYPE header
 in an SMTP session. Then both MIME type and the name of the attachment is
@@ -129,7 +181,7 @@ determine whether an attachment is sensitive or not:
     redef Email::sensitive_mime_types = /application\/octet-stream;
 
     # Restrict sensitive extensions to office documents and executables.
-    redef Email::sensitive_extensions = 
+    redef Email::sensitive_extensions =
         /[pP][dD][fF]$/
       | /[dD][oO][cC][xX]?$/
       | /[xX][lL][sS]$/
@@ -145,4 +197,4 @@ name.
 
 Requires Bro 1.5
 
-Contributed by Matthias Vallentin.
+Author: Matthias Vallentin
