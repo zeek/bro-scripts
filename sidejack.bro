@@ -33,54 +33,95 @@ export
     # Time after which a seen cookie is forgotten.
     const cookie_expiration = 1 hr &redef;
 
-    type cookie_info: record
+    type service_info: record
     {
+        desc: string;                # Service description.
         url: pattern;                # URL pattern matched against Host header.
         keys: set[string] &optional; # Cookie keys that define the user session.
         pat: pattern &optional;      # Cookie keys pattern, instead of a set.
     };
 
-    # List of cookie information per service (taken from Firesheep handlers).
-    const cookie_list: table[string] of cookie_info =
+    # Known session cookie definitions (from Firesheep handlers).
+    #
+    # FIXME: Ideally we use a 'vector of service_info' type here, but there is
+    # a bug in Bro that results in a type clash when constructing records with
+    # optional attributes inside a vector definition (see #485). A workaround
+    # is to use a table instead, yet this introduces a redundancy of key and
+    # $desc.  When this bug is fixed, we can simply remove any line consisting
+    # of
+    #
+    #   ["KEY"] =
+    #
+    # to make the service defintion redundancy-free (and more readable).
+    const services: table[string] of service_info =
     {
-        ["Amazon"]       = [$url=/amazon.com/, $keys=set("x-main")],
-        ["Basecamp"]     = [$url=/basecamphq.com/,
-                            $keys=set("_basecamp_session", "session_token")],
-        ["bit.ly"]       = [$url=/bit.ly/, $keys=set("user")],
-        ["Cisco"]        = [$url=/cisco.com/, $keys=set("SMIDENTITY")],
-        ["CNET"]         = [$url=/cnet.com/, $keys=set("urs_sessionId")],
-        ["Enom"]         = [$url=/enom.com/,
-                            $keys=set("OatmealCookie", "EmailAddress")],
-        ["Evernote"]     = [$url=/evernote.com/, $keys=set("auth")],
-# According to Firesheep, we have [ 'datr', 'c_user', 'lu', 'sct' ] for FB.
-        ["Facebook"]     = [$url=/facebook.com/, $keys=set("c_user", "sct")],
-        ["Flickr"]       = [$url=/flickr.com/, $keys=set("cookie_session")],
-        ["Fiverr"]       = [$url=/fiverr.com/, $keys=set("_fiverr_session")],
-        ["Foursquare"]   = [$url=/foursquare.com/,
-                            $keys=set("ext_id", "XSESSIONID")],
-        ["Google"]       = [$url=/google.com/,
-                           $keys=set("NID", "SID", "HSID", "PREF")],
-        ["Gowalla"]      = [$url=/gowalla.com/, $keys=set("__utma")],
-        ["Hacker News"]  = [$url=/news.ycombinator.com/, $keys=set("user")],
-        ["Harvest"]      = [$url=/harvestapp.com/, $keys=set("_harvest_sess")],
-        ["LinkedIn"]     = [$url=/linkedin.com/, $keys=set("bcookie")],
-        ["Pivotal Tracker"] = [$url=/pivotaltracker.com\/dashboard/,
-                            $keys=set("tracker_session")],
-        ["Posterous"]    = [$url=/.*/, $keys=set("_sharebymail_session_id")],
-        ["NY Times"]     = [$url=/nytimes.com/, $keys=set("NYT-s", "nyt-d")],
-        ["Reddit"]       = [$url=/reddit.com/, $keys=set("reddit_session")],
-        ["ShutterStock"] = [$url=/shutterstock.com/, $keys=set("ssssidd")],
-        ["StackOverflow"]= [$url=/stackoverflow.com/,
-                            $keys=set("usr", "gauthed")],
-        ["tumblr"]       = [$url=/tumblr.com/, $keys=set("pfp")],
-        ["Twitter"]      = [$url=/twitter.com/,
-                            $keys=set("_twitter_sess", "auth_token")],
-        ["Vimeo"]        = [$url=/vimeo.com/, $keys=set("vimeo")],
-        ["Yahoo"]        = [$url=/yahoo.com/, $keys=set("T", "Y")],
-        ["Yelp"]         = [$url=/yelp.com/, $keys=set("__utma")],
-        ["Windows Live"] = [$url=/live.com/,
-                            $keys=set("MSPProf", "MSPAuth", "RPSTAuth", "NAP")],
-        ["Wordpress"]    = [$url=/wordpress.com/, $pat=/wordpress_[0-9a-fA-F]+/]
+    ["Amazon"] =
+        [$desc="Amazon", $url=/amazon.com/, $keys=set("x-main")],
+    ["Basecamp"] =
+        [$desc="Basecamp", $url=/basecamphq.com/,
+            $keys=set("_basecamp_session", "session_token")],
+    ["bit.ly"] =
+        [$desc="bit.ly", $url=/bit.ly/, $keys=set("user")],
+    ["Cisco"] =
+        [$desc="Cisco", $url=/cisco.com/, $keys=set("SMIDENTITY")],
+    ["Cnet"] =
+        [$desc="CNET", $url=/cnet.com/, $keys=set("urs_sessionId")],
+    ["Enom"] =
+        [$desc="Enom", $url=/enom.com/,
+            $keys=set("OatmealCookie", "EmailAddress")],
+    ["Evernote"] =
+        [$desc="Evernote", $url=/evernote.com/, $keys=set("auth")],
+    ["Facebook"] =
+        [$desc="Facebook", $url=/facebook.com/,
+        $keys=set("datr", "c_user", "lu", "sct")],
+    ["Flickr"] =
+        [$desc="Flickr", $url=/flickr.com/, $keys=set("cookie_session")],
+    ["Fiverr"] =
+        [$desc="Fiverr", $url=/fiverr.com/, $keys=set("_fiverr_session")],
+    ["Foursquare"] =
+        [$desc="Foursquare", $url=/foursquare.com/,
+            $keys=set("ext_id", "XSESSIONID")],
+    ["Google"] =
+        [$desc="Google", $url=/google.com/,
+            $keys=set("NID", "SID", "HSID", "PREF")],
+    ["Gowalla"] =
+        [$desc="Gowalla", $url=/gowalla.com/, $keys=set("__utma")],
+    ["Hacker News"] =
+        [$desc="Hacker News", $url=/news.ycombinator.com/, $keys=set("user")],
+    ["Harvest"] =
+        [$desc="Harvest", $url=/harvestapp.com/, $keys=set("_harvest_sess")],
+    ["LinkedIn"] =
+        [$desc="LinkedIn", $url=/linkedin.com/, $keys=set("bcookie")],
+    ["Pivotal Tracker"] =
+        [$desc="Pivotal Tracker", $url=/pivotaltracker.com\/dashboard/,
+            $keys=set("tracker_session")],
+    ["Posterous"] =
+        [$desc="Posterous", $url=/.*/, $keys=set("_sharebymail_session_id")],
+    ["NY Times"] =
+        [$desc="NY Times", $url=/nytimes.com/, $keys=set("NYT-s", "nyt-d")],
+    ["Reddit"] =
+        [$desc="Reddit", $url=/reddit.com/, $keys=set("reddit_session")],
+    ["ShutterStock"] =
+        [$desc="ShutterStock", $url=/shutterstock.com/, $keys=set("ssssidd")],
+    ["StackOverflow"] =
+        [$desc="StackOverflow", $url=/stackoverflow.com/,
+            $keys=set("usr", "gauthed")],
+    ["tumblr"] =
+        [$desc="tumblr", $url=/tumblr.com/, $keys=set("pfp")],
+    ["Twitter"] =
+        [$desc="Twitter", $url=/twitter.com/,
+            $keys=set("_twitter_sess", "auth_token")],
+    ["Vimeo"] =
+        [$desc="Vimeo", $url=/vimeo.com/, $keys=set("vimeo")],
+    ["Yahoo"] =
+        [$desc="Yahoo", $url=/yahoo.com/, $keys=set("T", "Y")],
+    ["Yelp"] =
+        [$desc="Yelp", $url=/yelp.com/, $keys=set("__utma")],
+    ["Windows Live"] =
+        [$desc="Windows Live", $url=/live.com/,
+            $keys=set("MSPProf", "MSPAuth", "RPSTAuth", "NAP")],
+    ["Wordpress"] =
+        [$desc="Wordpress", $url=/wordpress.com/, $pat=/wordpress_[0-9a-fA-F]+/]
     } &redef;
 }
 
@@ -110,44 +151,29 @@ global hijacking_reported: set[string, string] &read_expire = cookie_expiration;
 global reuse_reported: set[string, string] &read_expire = cookie_expiration;
 
 # Create a unique user session identifier based on the relevant cookie keys.
-function sessionize(cookie: string, info: cookie_info) : string
+# Return the empty string if the sessionization does not succeed.
+function sessionize(cookie: string, info: service_info) : string
 {
     local id = "";
     local fields = split(cookie, /; /);
 
     if (info?$keys)
     {
-#        local matches = 0;
-#        for (i in fields)
-#        {
-#            local s = split1(fields[i], /=/);
-#            if (s[1] in info$keys)
-#            {
-#                ++matches;
-#                id += id == "" ? fields[i] : cat("; ", fields[i]);
-#            }
-#        }
-#
-#        # All specified keys have to match, otherwise reset the session ID.
-#        if (matches != |info$keys|)
-#            id = "";
-
-        # Instead of simply counting the number of matches and sequentially
-        # concatenating the found cookie fields, we have to ignore the order
-        # because the sidejacking tool might use a different order than the
-        # origin server.
-        local matches: set[string];
-        matches = set();
+        local matches: table[string] of string;
         for (i in fields)
         {
             local s = split1(fields[i], /=/);
             if (s[1] in info$keys)
-                add matches[fields[i]];
+                matches[s[1]] = s[2];
         }
 
         if (|matches| == |info$keys|)
-            for (m in matches)
-                id += id == "" ? m : cat("; ", m);
+            for (key in info$keys)
+            {
+                if (id != "")
+                    id += "; ";
+                id += key + "=" + matches[key];
+            }
     }
 
     if (info?$pat)
@@ -272,34 +298,25 @@ event http_all_headers(c: connection, is_orig: bool, hlist: mime_header_list)
     if (cookie == "")
         return;
 
+    local service = host;
     local session_cookie = "";
-    local service = "";
     if (host != "")
-        for (k in cookie_list)
+        for (s in services)
         {
-            local info = cookie_list[k];
+            local info = services[s];
             if (info$url in host)
             {
                 session_cookie = sessionize(cookie, info);
                 if (session_cookie != "")
                 {
-                    service = k;
+                    service = info$desc;
                     break;
                 }
             }
         }
 
-    if (service == "")
-    {
-        if (known_services_only)
-            return;
-
-        service = host;
-    }
-
     if (session_cookie == "")
     {
-        # Stop if we cannot parse the session cookie of a known service.
         if (known_services_only)
             return;
 
