@@ -281,8 +281,11 @@ event http_all_headers(c: connection, is_orig: bool, hlist: mime_header_list)
             if (info$url in host)
             {
                 session_cookie = sessionize(cookie, info);
-                service = k;
-                break;
+                if (session_cookie != "")
+                {
+                    service = k;
+                    break;
+                }
             }
         }
 
