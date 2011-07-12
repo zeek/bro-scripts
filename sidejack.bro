@@ -33,7 +33,7 @@ export
     # Time after which a seen cookie is forgotten.
     const cookie_expiration = 1 hr &redef;
 
-    type service_info: record
+    type ServiceInfo: record
     {
         desc: string;                # Service description.
         url: pattern;                # URL pattern matched against Host header.
@@ -43,7 +43,7 @@ export
 
     # Known session cookie definitions (from Firesheep handlers).
     #
-    # FIXME: Ideally we use a 'vector of service_info' type here, but there is
+    # FIXME: Ideally we use a 'vector of ServiceInfo' type here, but there is
     # a bug in Bro that results in a type clash when constructing records with
     # optional attributes inside a vector definition (see #485). A workaround
     # is to use a table instead, yet this introduces a redundancy of key and
@@ -53,7 +53,7 @@ export
     #   ["KEY"] =
     #
     # to make the service defintion redundancy-free (and more readable).
-    const services: table[string] of service_info =
+    const services: table[string] of ServiceInfo =
     {
     ["Amazon"] =
         [$desc="Amazon", $url=/amazon.com/, $keys=set("x-main")],
@@ -130,7 +130,7 @@ export
 @endif
 
 # Per-cookie state.
-type cookie_context: record
+type CookieContext: record
 {
     mac: string;            # MAC address of the user.
     client: addr;           # IP address of the user.
@@ -141,8 +141,7 @@ type cookie_context: record
 };
 
 # Map cookies to their contextual state.
-type cookie_map: table[string] of cookie_context;
-global cookies: cookie_map &read_expire = cookie_expiration;
+global cookies: table[string] of CookieContext &read_expire = cookie_expiration;
 
 # Hijacked sessions that have already been reported.
 global hijacking_reported: set[string, string] &read_expire = cookie_expiration;
@@ -152,7 +151,7 @@ global reuse_reported: set[string, string] &read_expire = cookie_expiration;
 
 # Create a unique user session identifier based on the relevant cookie keys.
 # Return the empty string if the sessionization does not succeed.
-function sessionize(cookie: string, info: service_info) : string
+function sessionize(cookie: string, info: ServiceInfo) : string
 {
     local id = "";
     local fields = split(cookie, /; /);
@@ -189,7 +188,7 @@ function sessionize(cookie: string, info: service_info) : string
     return id;
 }
 
-function is_aliased(client: addr, ctx: cookie_context) : bool
+function is_aliased(client: addr, ctx: CookieContext) : bool
 {
     if (client in Roam::ip_to_mac)
     {
@@ -202,7 +201,7 @@ function is_aliased(client: addr, ctx: cookie_context) : bool
     return F;
 }
 
-function update_cookie_context(ctx: cookie_context, cookie: string, id: string)
+function update_cookie_context(ctx: CookieContext, cookie: string, id: string)
 {
     ctx$cookie = cookie;
     ctx$last_seen = network_time();
@@ -220,7 +219,7 @@ function format_address(a: addr) : string
 }
 
 function report_session_reuse(c: connection, user_agent: string,
-        http_id: string, service: string, ctx: cookie_context)
+        http_id: string, service: string, ctx: CookieContext)
 {
     if ([ctx$cookie, user_agent] in reuse_reported)
         return;
@@ -238,7 +237,7 @@ function report_session_reuse(c: connection, user_agent: string,
 }
 
 function report_session_roamed(c: connection, user_agent: string,
-        http_id: string, service: string, ctx: cookie_context)
+        http_id: string, service: string, ctx: CookieContext)
 {
     local client = c$id$orig_h;
     local roamer = format_address(client);
@@ -256,7 +255,7 @@ function make_user(client: addr, user_agent: string) : string
 }
 
 function report_sidejacking(c: connection, user_agent: string,
-        http_id: string, service: string, ctx: cookie_context)
+        http_id: string, service: string, ctx: CookieContext)
 {
     local client = c$id$orig_h;
     local user = make_user(client, user_agent);

@@ -80,7 +80,7 @@ export {
       &redef; 
 
     # Type for an email attachment.
-    type attachment: record
+    type Attachment: record
     {
         id: count;
         mime_session: count;
@@ -94,13 +94,13 @@ export {
 global attachment_id: count = 0;
 
 # Attachments by MIME connection ID.
-global attachments: table[conn_id] of attachment;
+global attachments: table[conn_id] of Attachment;
 
 # Create a new attachment record.
 function new_attachment(session: MIME::mime_session_info, mime_type: string,
-        filename: string) : attachment
+        filename: string) : Attachment
 {
-    local a: attachment;
+    local a: Attachment;
     a$id = ++attachment_id;
     a$mime_session = session$id;
     a$mime_type = mime_type;
