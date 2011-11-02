@@ -1,4 +1,3 @@
-
 ========================
 Contributed Bro Scripts
 ========================
@@ -130,7 +129,7 @@ If a cookie is not seen after the ``cookie_expiration``, the associated state
 is removed. More information about the script can be found at
 SidejackingBlogPost_.
 
-Requires Bro 1.5.
+Requires Bro 2.x.
 
 .. _SidejackingBlogPost: http://matthias.vallentin.net/blog/2010/10/taming-the-sheep-detecting-sidejacking-with-bro/
 .. _Sidejacking: http://en.wikipedia.org/wiki/Session_hijacking
