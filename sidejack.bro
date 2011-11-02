@@ -100,8 +100,9 @@ type CookieContext: record
     client: addr;           ## IP address of the user.
     user_agent: string;     ## User-Agent header.
     last_seen: time;        ## Last time we saw the cookie from this user.
-    conn: string;      ## Last seen connection this cookie appeared in.
+    conn: string;           ## Last seen connection this cookie appeared in.
     cookie: string;         ## The session cookie, as seen the last time.
+    service: string;        ## The web service description of this cookie.
 };
 
 # Map cookies to their contextual state.
@@ -159,11 +160,10 @@ function is_aliased(client: addr, ctx: CookieContext) : bool
     return F;
 }
 
-function update_cookie_context(ctx: CookieContext, cookie: string, id: string)
+function update_cookie_context(ctx: CookieContext, c: connection)
 {
-    ctx$cookie = cookie;
     ctx$last_seen = network_time();
-    ctx$conn = id;
+    ctx$conn = c$uid;
     if (use_aliasing && ctx$client in Roam::ip_to_mac)
         ctx$mac = Roam::ip_to_mac[ctx$client];
 }
@@ -176,7 +176,7 @@ function format_address(a: addr) : string
         return fmt("%s", a);
 }
 
-function report_session_reuse(c: connection, service: string, ctx: CookieContext)
+function report_session_reuse(c: connection, ctx: CookieContext)
 {
     local attacker = format_address(c$id$orig_h);
     local victim = format_address(ctx$client);
@@ -184,20 +184,19 @@ function report_session_reuse(c: connection, service: string, ctx: CookieContext
             $suppress_for=10min,
             $user=fmt("%s '%s'", attacker, c$http$user_agent),
             $msg=fmt("%s reused %s session %s via cookie %s",
-                attacker, service, ctx$conn, ctx$cookie),
+                attacker, ctx$service, ctx$conn, ctx$cookie),
             $identifier=cat(ctx$cookie, c$http$user_agent)
            ]);
 }
 
-function report_session_roamed(c: connection, service: string, 
-        ctx: CookieContext)
+function report_session_roamed(c: connection, ctx: CookieContext)
 {
     local roamer = format_address(c$id$orig_h);
     NOTICE([$note=SessionCookieRoamed, $conn=c,
             $suppress_for=10min,
             $user=fmt("%s '%s'", roamer, c$http$user_agent),
             $msg=fmt("%s roamed %s session %s via cookie %s",
-                roamer, service, ctx$conn, ctx$cookie),
+                roamer, ctx$service, ctx$conn, ctx$cookie),
             $identifier=cat(ctx$cookie, roamer)]);
 }
 
@@ -208,14 +207,14 @@ function make_client(c: connection) : string
             fmt("%s '%s'", c$id$orig_h, c$http$user_agent);
 }
 
-function report_sidejacking(c: connection, service: string, ctx: CookieContext)
+function report_sidejacking(c: connection, ctx: CookieContext)
 {
     local attacker = format_address(c$id$orig_h);
     NOTICE([$note=Sidejacking, $conn=c,
             $suppress_for=10min,
             $user=fmt("%s '%s'", attacker, c$http$user_agent),
             $msg=fmt("%s hijacked %s session %s via cookie %s",
-                attacker, service, ctx$conn, ctx$cookie),
+                attacker, ctx$service, ctx$conn, ctx$cookie),
             $identifier=cat(ctx$cookie, make_client(c))]);
 }
 
@@ -275,12 +274,13 @@ event http_all_headers(c: connection, is_orig: bool, hlist: mime_header_list)
 
         cookies[cookie] =
         [
+            $mac=mac,
             $client=client,
             $user_agent=c$http$user_agent,
             $last_seen=network_time(),
             $conn=c$uid,
             $cookie=cookie,
-            $mac=mac
+            $service=service
         ];
 
         return;
@@ -296,7 +296,7 @@ event http_all_headers(c: connection, is_orig: bool, hlist: mime_header_list)
         {
             if (c$http$user_agent != ctx$user_agent)
             {
-                report_session_reuse(c, service, ctx);
+                report_session_reuse(c, ctx);
 
                 # Uncommenting this will have the effect of reversing the
                 # current and previous user agent, resulting in another notice
@@ -304,26 +304,25 @@ event http_all_headers(c: connection, is_orig: bool, hlist: mime_header_list)
                 #ctx$user_agent = c$http$user_agent;
             }
 
-            update_cookie_context(ctx, cookie, c$uid);
+            update_cookie_context(ctx, c);
         }
         else if (c$http$user_agent != ctx$user_agent)
         {
-            report_sidejacking(c, service, ctx);
+            report_sidejacking(c, ctx);
         }
         else if (use_aliasing)
         {
             if (is_aliased(client, ctx))
             {
-                update_cookie_context(ctx, cookie, c$uid);
-                report_session_roamed(c, service, ctx);
-
+                update_cookie_context(ctx, c);
+                report_session_roamed(c, ctx);
             }
             else
-                report_sidejacking(c, service, ctx);
+                report_sidejacking(c, ctx);
         }
     }
     else if (client == ctx$client && c$http$user_agent == ctx$user_agent)
-        update_cookie_context(ctx, cookie, c$uid);
+        update_cookie_context(ctx, c);
     else
-        report_sidejacking(c, service, ctx);
+        report_sidejacking(c, ctx);
 }
