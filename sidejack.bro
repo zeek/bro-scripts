@@ -47,6 +47,7 @@ export {
 
     ## Known session cookie definitions (from Firesheep handlers).
     const services: vector of ServiceInfo = {
+        [$desc="AKF Demo", $url=/verify.akfdemo.com/, $keys=set("session")],
         [$desc="Amazon", $url=/amazon.com/, $keys=set("x-main")],
         [$desc="Basecamp", $url=/basecamphq.com/,
             $keys=set("_basecamp_session", "session_token")],
