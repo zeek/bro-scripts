@@ -1,37 +1,34 @@
-# $Id: scan.bro 7073 2010-09-13 00:45:02Z vern $
+##! Scan detector ported from Bro 1.x.
+##!
+##! This script has evolved over many years and is quite a mess right now. We
+##! have adapted it to work with Bro 2.x, but eventually Bro 2.x will
+##! get its own rewritten and generalized scan detector.
 
-@load conn
-@load notice
-@load port-name
-@load hot
-@load drop
-@load trw-impl
+@load base/frameworks/notice/main
 
 module Scan;
 
 export {
-	redef enum Notice += {
-		PortScan,	# the source has scanned a number of ports
-		AddressScan,	# the source has scanned a number of addrs
+	redef enum Notice::Type += {
+		## The source has scanned a number of ports.
+		PortScan,
+		## The source has scanned a number of addresses.
+		AddressScan,
+		## Apparent flooding backscatter seen from source.
 		BackscatterSeen,
-			# apparent flooding backscatter seen from source
 
-		ScanSummary,	# summary of scanning activity
-		PortScanSummary,	# summary of distinct ports per scanner
-		LowPortScanSummary, # summary of distinct low ports per scanner
+		## Summary of scanning activity.
+		ScanSummary,
+		## Summary of distinct ports per scanner.
+		PortScanSummary,
+		## Summary of distinct low ports per scanner.
+		LowPortScanSummary,
 
-		PasswordGuessing, # source tried many user/password combinations
-		SuccessfulPasswordGuessing,	# same, but a login succeeded
-
-		Landmine,	# source touched a landmine destination
-		ShutdownThresh,	# source reached shut_down_thresh
-		LowPortTrolling,	# source touched privileged ports
+		## Source reached :bro:id:`Scan::shut_down_thresh`
+		ShutdownThresh,
+		## Source touched privileged ports.
+		LowPortTrolling,
 	};
-
-	# If true, we suppress scan-checking (we still do account-tried
-	# accounting).  This is provided because scan-checking can consume
-	# a lot of memory.
-	const suppress_scan_checks = F &redef;
 
 	# Whether to consider UDP "connections" for scan detection.
 	# Can lead to false positives due to UDP fanout from some P2P apps.
@@ -84,7 +81,7 @@ export {
 	# Threshold for scanning privileged ports.
 	const priv_scan_trigger = 5 &redef;
 	const troll_skip_service = {
-		smtp, ftp, ssh, 20/tcp, http,
+		25/tcp, 21/tcp, 22/tcp, 20/tcp, 80/tcp,
 	} &redef;
 
 	const report_accounts_tried: vector of count = {
@@ -105,16 +102,12 @@ export {
 		81/tcp, 443/tcp, 8000/tcp, 8001/tcp, 8080/tcp, }
 	&redef;
 
-	const skip_services = { ident, } &redef;
-	const skip_outbound_services = { Hot::allow_services, ftp, addl_web, }
+	const skip_services = { 113/tcp, } &redef;
+	const skip_outbound_services = { 21/tcp, addl_web, }
 		&redef;
 
 	const skip_scan_sources = {
 		255.255.255.255,	# who knows why we see these, but we do
-
-		# AltaVista.  Here just as an example of what sort of things
-		# you might list.
-		test-scooter.av.pa-x.dec.com,
 	} &redef;
 
 	const skip_scan_nets: set[subnet] = {} &redef;
@@ -127,7 +120,7 @@ export {
 	# to reflect possible SYN-flooding backscatter, and not true
 	# (stealth) scans.
 	const backscatter_ports = {
-		http, 53/tcp, 53/udp, bgp, 6666/tcp, 6667/tcp,
+		80/tcp, 8080/tcp, 53/tcp, 53/udp, 179/tcp, 6666/tcp, 6667/tcp,
 	} &redef;
 
 	const report_backscatter: vector of count = {
@@ -211,6 +204,7 @@ function scan_summary(t: table[addr] of set[addr], orig: addr): interval
 
 	if ( num_distinct_peers >= scan_summary_trigger )
 		NOTICE([$note=ScanSummary, $src=orig, $n=num_distinct_peers,
+			$identifier=fmt("%s", orig),
 			$msg=fmt("%s scanned a total of %d hosts",
 					orig, num_distinct_peers)]);
 
@@ -223,6 +217,7 @@ function port_summary(t: table[addr] of set[port], orig: addr): interval
 
 	if ( num_distinct_ports >= port_summary_trigger )
 		NOTICE([$note=PortScanSummary, $src=orig, $n=num_distinct_ports,
+			$identifier=fmt("%s", orig),
 			$msg=fmt("%s scanned a total of %d ports",
 					orig, num_distinct_ports)]);
 
@@ -236,6 +231,7 @@ function lowport_summary(t: table[addr] of set[port], orig: addr): interval
 	if ( num_distinct_lowports >= lowport_summary_trigger )
 		NOTICE([$note=LowPortScanSummary, $src=orig,
 			$n=num_distinct_lowports,
+			$identifier=fmt("%s", orig),
 			$msg=fmt("%s scanned a total of %d low ports",
 					orig, num_distinct_lowports)]);
 
@@ -268,9 +264,6 @@ function ignore_addr(a: addr)
 
 function check_scan(c: connection, established: bool, reverse: bool): bool
 	{
-	if ( suppress_scan_checks )
-		return F;
-
 	local id = c$id;
 
 	local service = "ftp-data" in c$service ? 20/tcp
@@ -278,7 +271,7 @@ function check_scan(c: connection, established: bool, reverse: bool): bool
 	local rev_service = reverse ? id$resp_p : id$orig_p;
 	local orig = reverse ? id$resp_h : id$orig_h;
 	local resp = reverse ? id$orig_h : id$resp_h;
-	local outbound = is_local_addr(orig);
+	local outbound = Site::is_local_addr(orig);
 
 	# The following works better than using get_conn_transport_proto()
 	# because c might not correspond to an active connection (which
@@ -306,14 +299,14 @@ function check_scan(c: connection, established: bool, reverse: bool): bool
 	if ( orig in ignored_scanners)
 		return F;
 
-	if ( (! established || service !in Hot::allow_services) &&
+	if ( ! established &&
 		# not established, service not expressly allowed
 
 		# not known peer set
-	     (orig !in distinct_peers || resp !in distinct_peers[orig]) &&
+		(orig !in distinct_peers || resp !in distinct_peers[orig]) &&
 
 		# want to consider service for scan detection
-	     (analyze_all_services || service in analyze_services) )
+		(analyze_all_services || service in analyze_services) )
 		{
 		if ( reverse && rev_service in backscatter_ports &&
 		     # reverse, non-priv backscatter port
@@ -341,14 +334,11 @@ function check_scan(c: connection, established: bool, reverse: bool): bool
 					|distinct_backscatter_peers[orig]|)
 			   )
 				{
-				local rev_svc = rev_service in port_names ?
-					port_names[rev_service] :
-					fmt("%s", rev_service);
-
 				NOTICE([$note=BackscatterSeen, $src=orig,
 					$p=rev_service,
+					$identifier=fmt("%s", orig),
 					$msg=fmt("backscatter seen from %s (%d hosts; %s)",
-						orig, |distinct_backscatter_peers[orig]|, rev_svc)]);
+						orig, |distinct_backscatter_peers[orig]|, rev_service)]);
 				}
 
 			if ( ignore_scanners_threshold > 0 &&
@@ -360,9 +350,6 @@ function check_scan(c: connection, established: bool, reverse: bool): bool
 		else
 			{ # done with backscatter check
 			local ignore = F;
-
-			local svc = service in port_names ?
-				port_names[service] : fmt("%s", service);
 
 			if ( orig !in distinct_peers && addr_scan_trigger > 0 )
 				{
@@ -385,23 +372,15 @@ function check_scan(c: connection, established: bool, reverse: bool): bool
 
 				local n = |distinct_peers[orig]|;
 
-				if ( activate_landmine_check &&
-				     n >= landmine_thresh_trigger &&
-				     mask_addr(resp, 24) in landmine_address )
-					{
-					local msg2 = fmt("landmine address trigger %s%s ", orig, svc);
-					NOTICE([$note=Landmine, $src=orig,
-						$p=service, $msg=msg2]);
-					}
-
 				# Check for threshold if not outbound.
 				if ( ! shut_down_thresh_reached[orig] &&
 				     n >= shut_down_thresh &&
-				     ! outbound && orig !in neighbor_nets )
+				     ! outbound && orig !in Site::neighbor_nets )
 					{
 					shut_down_thresh_reached[orig] = T;
 					local msg = fmt("shutdown threshold reached for %s", orig);
 					NOTICE([$note=ShutdownThresh, $src=orig,
+						$identifier=fmt("%s", orig),
 						$p=service, $msg=msg]);
 					}
 
@@ -421,8 +400,9 @@ function check_scan(c: connection, established: bool, reverse: bool): bool
 						NOTICE([$note=AddressScan,
 							$src=orig, $p=service,
 							$n=n,
+							$identifier=fmt("%s-%d", orig, n),
 							$msg=fmt("%s has scanned %d hosts (%s)",
-								orig, n, svc)]);
+								orig, n, service)]);
 
 					if ( address_scan &&
 					     ignore_scanners_threshold > 0 &&
@@ -471,12 +451,11 @@ function check_scan(c: connection, established: bool, reverse: bool): bool
 			add distinct_low_ports[orig][service];
 
 			if ( |distinct_low_ports[orig]| == priv_scan_trigger &&
-			     orig !in neighbor_nets )
+			     orig !in Site::neighbor_nets )
 				{
-				local s = service in port_names ? port_names[service] :
-						fmt("%s", service);
-				local svrc_msg = fmt("low port trolling %s %s", orig, s);
+				local svrc_msg = fmt("low port trolling %s %s", orig, service);
 				NOTICE([$note=LowPortTrolling, $src=orig,
+					$identifier=fmt("%s", orig),
 					$p=service, $msg=svrc_msg]);
 				}
 
@@ -508,6 +487,7 @@ function check_scan(c: connection, established: bool, reverse: bool): bool
 				local m = |scan_triples[orig][resp]|;
 				NOTICE([$note=PortScan, $n=m, $src=orig,
 					$p=service,
+					$identifier=fmt("%s-%d", orig, n),
 					$msg=fmt("%s has scanned %d ports of %s",
 					orig, m, resp)]);
 				}
@@ -518,68 +498,15 @@ function check_scan(c: connection, established: bool, reverse: bool): bool
 	}
 
 
-event account_tried(c: connection, user: string, passwd: string)
-	{
-	local src = c$id$orig_h;
-
-	if ( src !in accounts_tried )
-		accounts_tried[src] = set();
-
-	if ( [user, passwd] in accounts_tried[src] )
-		return;
-
-	local threshold_check = F;
-
-	if ( is_local_addr(src) )
-		{
-		if ( thresh_check(report_remote_accounts_tried, rrat_idx, src,
-					|accounts_tried[src]|) )
-			threshold_check = T;
-		}
-	else
-		{
-		if ( thresh_check(report_accounts_tried, rat_idx, src,
-					|accounts_tried[src]|) )
-			 threshold_check = T;
-		}
-
-	if ( threshold_check && src !in skip_accounts_tried )
-		{
-		local m = |accounts_tried[src]|;
-		NOTICE([$note=PasswordGuessing, $src=src, $n=m,
-			$user=user, $sub=passwd, $p=c$id$resp_p,
-			$msg=fmt("%s has tried %d username/password combinations (latest: %s@%s)",
-				src, m,	user, c$id$resp_h)]);
-		}
-
-	add accounts_tried[src][user, passwd];
-	}
-
-# Check for a successful login attempt from a scan.
-event login_successful(c: connection, user: string)
-	{
-	local id = c$id;
-	local src = id$orig_h;
-
-	if ( src in accounts_tried &&
-	     |accounts_tried[src]| >= password_guessing_success_threshhold )
-		NOTICE([$note=SuccessfulPasswordGuessing, $src=src, $conn=c,
-			$msg=fmt("%s successfully logged in user '%s' after trying %d username/password combinations",
-				src, user, |accounts_tried[src]|)]);
-	}
-
-
 # Hook into the catch&release dropping. When an address gets restored, we reset
 # the source to allow dropping it again.
 event Drop::address_restored(a: addr)
 	{
-	Drop::debug_log(fmt("received restored for %s (scan.bro)", a));
 	clear_addr(a);
 	}
 
 event Drop::address_cleared(a: addr)
 	{
-	Drop::debug_log(fmt("received cleared for %s (scan.bro)", a));
 	clear_addr(a);
 	}
 
@@ -641,10 +568,6 @@ event connection_established(c: connection)
 	{
 	local is_reverse_scan = (c$orig$state == TCP_INACTIVE);
 	Scan::check_scan(c, T, is_reverse_scan);
-
-	local trans = get_port_transport_proto(c$id$orig_p);
-	if ( trans == tcp && ! is_reverse_scan && TRW::use_TRW_algorithm )
-		TRW::check_TRW_scan(c, conn_state(c, trans), F);
 	}
 
 event partial_connection(c: connection)
@@ -655,10 +578,6 @@ event partial_connection(c: connection)
 event connection_attempt(c: connection)
 	{
 	Scan::check_scan(c, F, c$orig$state == TCP_INACTIVE);
-
-	local trans = get_port_transport_proto(c$id$orig_p);
-	if ( trans == tcp && TRW::use_TRW_algorithm )
-		TRW::check_TRW_scan(c, conn_state(c, trans), F);
 	}
 
 event connection_half_finished(c: connection)
@@ -672,10 +591,6 @@ event connection_rejected(c: connection)
 	local is_reverse_scan = c$orig$state == TCP_RESET;
 
 	Scan::check_scan(c, F, is_reverse_scan);
-
-	local trans = get_port_transport_proto(c$id$orig_p);
-	if ( trans == tcp && TRW::use_TRW_algorithm )
-		TRW::check_TRW_scan(c, conn_state(c, trans), is_reverse_scan);
 	}
 
 event connection_reset(c: connection)
