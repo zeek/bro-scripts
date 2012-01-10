@@ -18,9 +18,9 @@ export {
 	## Windows executable.
 	const bad_exec_urls = 
 	    /php\.adv=/
-	  | /http:\/\/[^\/]c[oxz]\.cc\/.*/
-	  | /http:\/\/www1.*/
-	  | /http:\/\/[0-9]{1,3}\.[0-9]{1,3}.*\/index\.php\?[^=]+=[^=]+$/ #try to match http://1.2.3.4/index.php?foo=bar
+	  | /^http:\/\/[^\/]c[oxz]\.cc\//
+	  | /^http:\/\/www1/
+	  | /^http:\/\/[0-9]{1,3}\.[0-9]{1,3}.*\/index\.php\?[^=]+=[^=]+$/ #try to match http://1.2.3.4/index.php?foo=bar
 	  | /load\.php/ &redef;
 	
 	## Pattern matching user-agents that will tend to be bad to see downloading
