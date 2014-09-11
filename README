@@ -46,7 +46,7 @@ IP address:
         return F;
     }
 
-If the two table are not accessed for more than the ``alias_expiration``, the
+If the two tables are not accessed for more than the ``alias_expiration``, the
 entry will expire. It is possible to redefine the expiration interval:
 
 ::
