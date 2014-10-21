@@ -1,5 +1,5 @@
 ##! A script for handling URLs in SMTP traffic.  This script does 
-##! two things.  It logs URLs discovered in STMP traffic.  It 
+##! two things.  It logs URLs discovered in SMTP traffic.  It 
 ##! also records them in a bloomfilter and looks for them to be
 ##! visited through HTTP requests.  
 ##!
@@ -45,7 +45,7 @@ export {
 		Dotted_URL
 	};
 	
-	const suspicious_file_extensions = /\.([rR][aA][rR|[eE][xX][eE]|[zZ][iI][pP])$/ &redef;
+	const suspicious_file_extensions = /\.([rR][aA][rR]|[eE][xX][eE]|[zZ][iI][pP])$/ &redef;
 	const suspicious_urls = /googledocs?/ &redef;
 
 	const ignore_file_types = /\.([gG][iI][fF]|[pP][nN][gG]|[jJ][pP][gG]|[xX][mM][lL]|[jJ][pP][eE]?[gG]|[cC][sS][sS])$/ &redef;
