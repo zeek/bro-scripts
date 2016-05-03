@@ -113,16 +113,16 @@ global cookies: table[string] of CookieContext &read_expire = cookie_expiration;
 function sessionize(cookie: string, info: ServiceInfo) : string
 {
     local id = "";
-    local fields = split(cookie, /; /);
+    local fields = split_string(cookie, /; /);
 
     if (info?$keys)
     {
         local matches: table[string] of string;
         for (i in fields)
         {
-            local s = split1(fields[i], /=/);
-            if (s[1] in info$keys)
-                matches[s[1]] = s[2];
+            local s = split_string1(fields[i], /=/);
+            if (s[0] in info$keys)
+                matches[s[0]] = s[1];
         }
 
         if (|matches| == |info$keys|)
@@ -138,8 +138,8 @@ function sessionize(cookie: string, info: ServiceInfo) : string
     {
         for (i in fields)
         {
-            s = split1(fields[i], /=/);
-            if (s[1] == info$pat)
+            s = split_string1(fields[i], /=/);
+            if (s[0] == info$pat)
                 id += id == "" ? fields[i] : cat("; ", fields[i]);
         }
     }
@@ -182,7 +182,7 @@ function report_session_reuse(c: connection, ctx: CookieContext)
     local victim = format_address(ctx$client);
     NOTICE([$note=SessionCookieReuse, $conn=c,
             $suppress_for=10min,
-            $user=fmt("%s '%s'", attacker, c$http$user_agent),
+            $uid=fmt("%s '%s'", attacker, c$http$user_agent),
             $msg=fmt("%s reused %s session %s via cookie %s",
                 attacker, ctx$service, ctx$conn, ctx$cookie),
             $identifier=cat(ctx$cookie, c$http$user_agent)
@@ -194,7 +194,7 @@ function report_session_roamed(c: connection, ctx: CookieContext)
     local roamer = format_address(c$id$orig_h);
     NOTICE([$note=SessionCookieRoamed, $conn=c,
             $suppress_for=10min,
-            $user=fmt("%s '%s'", roamer, c$http$user_agent),
+            $uid=fmt("%s '%s'", roamer, c$http$user_agent),
             $msg=fmt("%s roamed %s session %s via cookie %s",
                 roamer, ctx$service, ctx$conn, ctx$cookie),
             $identifier=cat(ctx$cookie, roamer)]);
@@ -212,7 +212,7 @@ function report_sidejacking(c: connection, ctx: CookieContext)
     local attacker = format_address(c$id$orig_h);
     NOTICE([$note=Sidejacking, $conn=c,
             $suppress_for=10min,
-            $user=fmt("%s '%s'", attacker, c$http$user_agent),
+            $uid=fmt("%s '%s'", attacker, c$http$user_agent),
             $msg=fmt("%s hijacked %s session %s via cookie %s",
                 attacker, ctx$service, ctx$conn, ctx$cookie),
             $identifier=cat(ctx$cookie, make_client(c))]);
