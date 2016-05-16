@@ -90,7 +90,7 @@ export {
 }
 
 @ifdef(use_aliasing)
-@load roam
+@load ./roam
 @endif
 
 ## Per-cookie state.
